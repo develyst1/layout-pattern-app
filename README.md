@@ -11,8 +11,8 @@ requirement, spec and tasks.
 ## Prerequisites
 
 - **Node.js 22.12.0 or newer** — required, not merely recommended: the Electron
-  installer declares `engines.node >= 22.12.0` and its postinstall step fails on
-  older Node. Verified on `v22.23.2`.
+  package declares `engines.node >= 22.12.0`, and on older Node its tooling fails
+  when the binary is fetched. Verified on `v22.23.2`.
 - **npm 10 or newer** — verified on `10.9.8`.
 - Windows, macOS or Linux desktop session (the app opens a native window).
 

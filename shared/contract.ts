@@ -109,6 +109,12 @@ export function parseTemplateFile(raw: string): ParseResult {
   if (typeof name !== 'string') {
     return { ok: false, reason: 'name is missing or not a string' };
   }
+  // SPEC-001 §3 / §9 A-11: main refuses to *write* a blank template name
+  // (INVALID_PAYLOAD, §4) and REQ-001 A10 disables Save, so a loaded blank name
+  // would be a template that can never be saved again.
+  if (name.trim() === '') {
+    return { ok: false, reason: 'name is blank or whitespace-only' };
+  }
   if (!isPositiveInteger(canvasWidth)) {
     return { ok: false, reason: 'canvasWidth is not a positive integer' };
   }
@@ -120,6 +126,7 @@ export function parseTemplateFile(raw: string): ParseResult {
   }
 
   const parsedSlots: SlotData[] = [];
+  const seenIds = new Set<string>();
   const seenNames = new Set<string>();
 
   for (let index = 0; index < slots.length; index += 1) {
@@ -154,6 +161,26 @@ export function parseTemplateFile(raw: string): ParseResult {
     if (typeof color !== 'string' || !HEX_COLOR.test(color)) {
       return { ok: false, reason: `slots[${index}].color is not a #rrggbb hex colour` };
     }
+
+    // SPEC-001 §3 "What a loaded file must satisfy" (§9 A-11): reject what this
+    // app's own UI can never produce. The blank name is checked BEFORE the
+    // duplicate-name check, same order as §5, so a blank never reports as a collision.
+    if (slotName.trim() === '') {
+      return { ok: false, reason: `slots[${index}].name is blank or whitespace-only` };
+    }
+    // Not §5's 20x20 floor — that is a Transformer interaction limit, not a file
+    // invariant. Zero is invisible and unselectable; negative draws mirrored in Konva.
+    if (width <= 0) {
+      return { ok: false, reason: `slots[${index}].width is not greater than 0` };
+    }
+    if (height <= 0) {
+      return { ok: false, reason: `slots[${index}].height is not greater than 0` };
+    }
+    // Exact string comparison — ids are UUIDs; no trimming, no case folding.
+    if (seenIds.has(id)) {
+      return { ok: false, reason: `duplicate slot id: ${JSON.stringify(id)}` };
+    }
+    seenIds.add(id);
 
     const key = nameKey(slotName);
     if (seenNames.has(key)) {

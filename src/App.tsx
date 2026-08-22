@@ -1,16 +1,17 @@
+import { AppShell } from './components/AppShell';
 import { DesignerCanvas } from './components/DesignerCanvas';
 import { SlotListPanel } from './components/SlotListPanel';
 import { SlotPropertiesPanel } from './components/SlotPropertiesPanel';
 import { Toolbar } from './components/Toolbar';
 
 /**
- * TASK-003 scope: the Layout Designer only. The mode shell (Designer / Use
- * Template), the template-name field, save / load and the dark-mode toggle are
- * TASK-004 — the `dark:` classes below are already in place for it.
+ * REQ-001 ships the Layout Designer only: the shell's second mode (Use Template)
+ * is a visibly disabled entry that cannot be activated (A6), so the designer is
+ * the single thing rendered inside the shell.
  */
 export default function App(): JSX.Element {
   return (
-    <div className="flex h-full flex-col bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <AppShell>
       <Toolbar />
       <div className="flex min-h-0 flex-1">
         <main className="min-w-0 flex-1">
@@ -21,6 +22,6 @@ export default function App(): JSX.Element {
           <SlotListPanel />
         </aside>
       </div>
-    </div>
+    </AppShell>
   );
 }

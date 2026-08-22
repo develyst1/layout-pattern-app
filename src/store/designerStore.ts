@@ -186,12 +186,27 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   selectSlot: (id) => set({ selectedSlotId: id }),
 
   // SPEC-001 §5 "Load": replaces the whole designer state, never merges.
+  //
+  // Two repairs happen HERE and nowhere else, because `parseTemplateFile`
+  // deliberately accepts both (SPEC-001 §3 / §9 A-11 — repairable input is the
+  // renderer's job to repair, not the validator's to reject):
+  //   * `normalizeZIndex` — duplicated / non-contiguous zIndex values come out
+  //     contiguous 0…n-1 in the same visual stacking order;
+  //   * `.trim()` on the template name and on every slot name — a hand-edited
+  //     file may be padded, and §5's rename path can never produce a padded
+  //     name, so an untrimmed load would leave the store in a state the UI
+  //     itself cannot reach (TASK-002 §Review N5).
+  // Trim only: blank names are already rejected by the validator, so a trim can
+  // never empty a name here.
   replaceAll: (template) =>
     set({
       canvasWidth: template.canvasWidth,
       canvasHeight: template.canvasHeight,
-      templateName: template.name,
-      slots: normalizeZIndex(template.slots),
+      templateName: template.name.trim(),
+      slots: normalizeZIndex(template.slots).map((slot) => ({
+        ...slot,
+        name: slot.name.trim(),
+      })),
       selectedSlotId: null,
     }),
 
@@ -199,7 +214,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     const { templateName, canvasWidth, canvasHeight, slots } = get();
     return {
       formatVersion: TEMPLATE_FORMAT_VERSION,
-      name: templateName,
+      // R1 (TASK-004 R1): trim where the value leaves the app, so save -> load -> save is
+      // idempotent. The store still keeps exactly what the user typed.
+      name: templateName.trim(),
       canvasWidth,
       canvasHeight,
       slots: normalizeZIndex(slots).map((slot) => ({

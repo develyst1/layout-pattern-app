@@ -5,7 +5,13 @@
 // and no channel, field or result variant may be added here without a SPEC
 // change. It imports nothing — no `fs`, no `electron` — so both sides can use it.
 
-export const TEMPLATE_FORMAT_VERSION = 1;
+export const TEMPLATE_FORMAT_VERSION = 2;
+
+/**
+ * SPEC-002 §3 / SA call B-1: accepted by `parseTemplateFile` on read. An absent
+ * `formatVersion` means 1 — a REQ-001-era file, which has no `required` field.
+ */
+export const SUPPORTED_FORMAT_VERSIONS = [1, 2] as const;
 
 export interface SlotData {
   id: string;
@@ -16,6 +22,8 @@ export interface SlotData {
   height: number;
   zIndex: number;
   color: string;
+  /** REQ-002 Req 15. Absent in a v1 file -> `parseTemplateFile` fills in `true`. */
+  required: boolean;
 }
 
 export interface TemplateFile {
@@ -47,6 +55,42 @@ export type OpenTemplateResult =
   | { status: 'opened'; filePath: string; content: string }
   | { status: 'canceled' }
   | { status: 'error'; code: 'READ_FAILED'; detail: string };
+
+// ---- image:pick (SPEC-002 §4) ---------------------------------------------
+
+export interface PickImagesOptions {
+  dialogTitle: string;
+  fileTypeLabel: string;
+  /** true -> the dialog allows multi-select (Req 4b); false -> exactly one file. */
+  multiple: boolean;
+}
+
+export interface PickedImage {
+  filePath: string;
+  /** Basename, for display only. Never parsed, never used as an identity. */
+  fileName: string;
+  mimeType: 'image/jpeg' | 'image/png';
+  /** Raw file bytes. The renderer wraps them in a Blob — never base64. */
+  bytes: Uint8Array;
+}
+
+export type PickImagesResult =
+  | { status: 'picked'; images: PickedImage[] }
+  | { status: 'canceled' }
+  | { status: 'error'; code: 'READ_FAILED'; detail: string };
+
+// ---- png:save (SPEC-002 §4) -----------------------------------------------
+
+export interface SavePngOptions {
+  dialogTitle: string;
+  fileTypeLabel: string;
+  defaultFileName: string;
+}
+
+export type SavePngResult =
+  | { status: 'saved'; filePath: string }
+  | { status: 'canceled' }
+  | { status: 'error'; code: 'INVALID_PAYLOAD' | 'WRITE_FAILED'; detail: string };
 
 /** Pure, no I/O — used by the renderer after openTemplate returns raw text. */
 export type ParseResult =
@@ -97,7 +141,11 @@ export function parseTemplateFile(raw: string): ParseResult {
   }
 
   const { formatVersion } = data;
-  if (formatVersion !== undefined && formatVersion !== TEMPLATE_FORMAT_VERSION) {
+  // SPEC-002 §3 / B-1: absent, 1 and 2 are all readable; anything else is not.
+  if (
+    formatVersion !== undefined &&
+    !(SUPPORTED_FORMAT_VERSIONS as readonly unknown[]).includes(formatVersion)
+  ) {
     return {
       ok: false,
       reason: `unsupported formatVersion: ${JSON.stringify(formatVersion)}`,
@@ -135,7 +183,7 @@ export function parseTemplateFile(raw: string): ParseResult {
       return { ok: false, reason: `slots[${index}] is not an object` };
     }
 
-    const { id, name: slotName, x, y, width, height, zIndex, color } = slot;
+    const { id, name: slotName, x, y, width, height, zIndex, color, required } = slot;
 
     if (typeof id !== 'string') {
       return { ok: false, reason: `slots[${index}].id is not a string` };
@@ -160,6 +208,12 @@ export function parseTemplateFile(raw: string): ParseResult {
     }
     if (typeof color !== 'string' || !HEX_COLOR.test(color)) {
       return { ok: false, reason: `slots[${index}].color is not a #rrggbb hex colour` };
+    }
+    // SPEC-002 §3: absent is legal and means `true` (Req 15c / B19) — a v1 file
+    // simply has no such key, so this can never be the first thing it fails on.
+    // Present but not a boolean is a rejection, like every other wrong type here.
+    if (required !== undefined && typeof required !== 'boolean') {
+      return { ok: false, reason: `slots[${index}].required is present but not a boolean` };
     }
 
     // SPEC-001 §3 "What a loaded file must satisfy" (§9 A-11): reject what this
@@ -191,7 +245,17 @@ export function parseTemplateFile(raw: string): ParseResult {
     }
     seenNames.add(key);
 
-    parsedSlots.push({ id, name: slotName, x, y, width, height, zIndex, color });
+    parsedSlots.push({
+      id,
+      name: slotName,
+      x,
+      y,
+      width,
+      height,
+      zIndex,
+      color,
+      required: required === undefined ? true : required,
+    });
   }
 
   return {

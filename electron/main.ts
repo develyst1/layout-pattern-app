@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { registerImageIpc } from './ipc/image';
 import { registerTemplateIpc } from './ipc/template';
 
 // Set by vite-plugin-electron while `npm run dev` is running; undefined in a
@@ -45,6 +46,7 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   // Handlers are registered once, before the first window exists (SPEC-001 §4).
   registerTemplateIpc();
+  registerImageIpc();
 
   createWindow();
 

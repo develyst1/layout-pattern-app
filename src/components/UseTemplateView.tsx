@@ -24,8 +24,11 @@ export type UseTemplateMessageKey =
 /**
  * The whole state of that one line. `slots` fills the single `{slots}`
  * placeholder `error.requiredSlotEmpty` carries (SPEC-002 §7 / SA call B-9) —
- * one `String.replace` at render time, and nothing anywhere ever branches on a
- * message's *text*.
+ * one `String.replace` at render time, in its **replacer-function** form, because a
+ * *string* replacement is scanned for its `$` patterns (`$&`, `$$`, `$'` and the backtick
+ * form) and a slot name may legally contain them (TASK-010); a function replacement
+ * lands verbatim.
+ * Nothing anywhere ever branches on a message's *text*.
  */
 interface UseTemplateMessage {
   key: UseTemplateMessageKey;
@@ -193,7 +196,7 @@ export function UseTemplateView(): JSX.Element {
 
         {message && (
           <p role="alert" className="w-full text-xs text-red-600 dark:text-red-400">
-            {th[message.key].replace('{slots}', message.slots ?? '')}
+            {th[message.key].replace('{slots}', () => message.slots ?? '')}
           </p>
         )}
       </div>

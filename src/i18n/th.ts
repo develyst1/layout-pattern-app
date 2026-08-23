@@ -1,7 +1,7 @@
 // The ONLY place Thai user-facing text exists (SPEC-001 §2, §7).
 //
-// All 39 keys and their values are copied verbatim from the SPEC that introduced
-// them — 26 from SPEC-001 §7 and 13 from SPEC-002 §7 (whose 18 strings the human
+// All 44 keys and their values are copied verbatim from the SPEC that introduced
+// them — 26 from SPEC-001 §7 and all 18 from SPEC-002 §7 (whose 18 strings the human
 // approved on 2026-08-23, REQ-002 Q13). SPEC-001's 27th, `mode.useTemplate.badge`,
 // was deleted by TASK-007: the mode is available now, so it became dead text. The
 // keys are fixed by the SPEC; the values are the human's to approve. A wording correction is
@@ -36,16 +36,21 @@ export const th = {
   'useTemplate.removePhoto': 'เอารูปออก', // per-row button: take the photo back out
   'useTemplate.slotEmpty': 'ยังไม่มีรูป', // marker on a row whose slot has no photo
   'useTemplate.slotRequired': 'ต้องใส่รูป', // marker on a row whose slot is required
+  'useTemplate.generate': 'สร้างภาพ', // button: produce the finished PNG
   'dialog.save.title': 'บันทึกไฟล์เทมเพลต', // native Save dialog title
   'dialog.open.title': 'เปิดไฟล์เทมเพลต', // native Open dialog title
   'dialog.fileTypeLabel': 'ไฟล์เทมเพลต (JSON)', // file-type label for the JSON filter
   'dialog.pickPhotos.title': 'เลือกไฟล์รูปภาพ', // native Open dialog title for photos
   'dialog.photoTypeLabel': 'ไฟล์รูปภาพ (JPG, PNG)', // file-type label for the JPG/PNG filter
+  'dialog.exportPng.title': 'บันทึกไฟล์ภาพ', // native Save dialog title for the PNG
+  'dialog.pngTypeLabel': 'ไฟล์ภาพ (PNG)', // file-type label for the PNG filter
   'error.saveFailed': 'บันทึกไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', // writing the file failed (`WRITE_FAILED`)
   'error.loadFailed': 'เปิดไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', // reading the file failed (`READ_FAILED`)
   'error.fileUnreadable': 'ไฟล์นี้ไม่ใช่ไฟล์เทมเพลตที่ใช้งานได้', // the chosen file is not a valid template
+  'error.requiredSlotEmpty': 'ยังมีช่องที่ต้องใส่รูปว่างอยู่: {slots}', // Generate refused; `{slots}` is filled at render time
   'error.photoUnreadable': 'ไฟล์รูปนี้ใช้งานไม่ได้', // the chosen file is not a usable JPG/PNG
   'error.photoLoadFailed': 'เปิดไฟล์รูปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', // `image:pick` `READ_FAILED`
+  'error.exportFailed': 'บันทึกไฟล์ภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', // `png:save` `WRITE_FAILED` / encode failed
   'error.duplicateSlotName': 'มีช่องที่ใช้ชื่อนี้อยู่แล้ว กรุณาตั้งชื่ออื่น', // duplicate-rename warning (REQ-001 Q11 / Req 15 / A11)
   'error.blankSlotName': 'ชื่อช่องต้องไม่เว้นว่าง กรุณาตั้งชื่อใหม่', // blank-name warning (REQ-001 Q13 / Req 16 / A15)
 } as const;

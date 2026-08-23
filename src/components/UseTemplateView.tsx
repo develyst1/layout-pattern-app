@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseTemplateFile } from '@shared/contract';
+import { composeTemplateToCanvas } from '@/lib/compose';
 import { decodePhotos } from '@/lib/photo';
 import { useTemplateStore } from '@/store/useTemplateStore';
 import { th } from '@/i18n/th';
@@ -16,7 +17,20 @@ export type UseTemplateMessageKey =
   | 'error.loadFailed'
   | 'error.fileUnreadable'
   | 'error.photoUnreadable'
-  | 'error.photoLoadFailed';
+  | 'error.photoLoadFailed'
+  | 'error.requiredSlotEmpty'
+  | 'error.exportFailed';
+
+/**
+ * The whole state of that one line. `slots` fills the single `{slots}`
+ * placeholder `error.requiredSlotEmpty` carries (SPEC-002 §7 / SA call B-9) —
+ * one `String.replace` at render time, and nothing anywhere ever branches on a
+ * message's *text*.
+ */
+interface UseTemplateMessage {
+  key: UseTemplateMessageKey;
+  slots?: string;
+}
 
 /**
  * Use Template (SPEC-002 §6, TASK-007 + TASK-008). The layout mirrors the
@@ -31,13 +45,18 @@ export type UseTemplateMessageKey =
  */
 export function UseTemplateView(): JSX.Element {
   const template = useTemplateStore((state) => state.template);
+  const photos = useTemplateStore((state) => state.photos);
   const loadTemplate = useTemplateStore((state) => state.loadTemplate);
   const fillFromPhotos = useTemplateStore((state) => state.fillFromPhotos);
 
-  const [messageKey, setMessageKey] = useState<UseTemplateMessageKey | null>(null);
+  const [message, setMessage] = useState<UseTemplateMessage | null>(null);
+  /** Every message except the one with a placeholder is just its key. */
+  const showMessage = (key: UseTemplateMessageKey | null): void => {
+    setMessage(key === null ? null : { key });
+  };
 
   const handlePickTemplate = async (): Promise<void> => {
-    setMessageKey(null);
+    showMessage(null);
     const result = await window.api.openTemplate({
       dialogTitle: th['dialog.open.title'],
       fileTypeLabel: th['dialog.fileTypeLabel'],
@@ -47,7 +66,7 @@ export function UseTemplateView(): JSX.Element {
     }
     if (result.status === 'error') {
       console.error(`openTemplate ${result.code}: ${result.detail}`);
-      setMessageKey('error.loadFailed');
+      showMessage('error.loadFailed');
       return;
     }
     const parsed = parseTemplateFile(result.content);
@@ -55,7 +74,7 @@ export function UseTemplateView(): JSX.Element {
       // B10: a bad file changes nothing — the template and photos already
       // loaded stay exactly as they were.
       console.error(`parseTemplateFile rejected the file: ${parsed.reason}`);
-      setMessageKey('error.fileUnreadable');
+      showMessage('error.fileUnreadable');
       return;
     }
     loadTemplate(parsed.template);
@@ -65,7 +84,7 @@ export function UseTemplateView(): JSX.Element {
   // before any of it is placed (B-4 / B-11); `fillFromPhotos` then fills the
   // empty slots top-most first and silently revokes whatever it did not use.
   const handlePickManyPhotos = async (): Promise<void> => {
-    setMessageKey(null);
+    showMessage(null);
     const result = await window.api.pickImages({
       dialogTitle: th['dialog.pickPhotos.title'],
       fileTypeLabel: th['dialog.photoTypeLabel'],
@@ -76,16 +95,60 @@ export function UseTemplateView(): JSX.Element {
     }
     if (result.status === 'error') {
       console.error(`pickImages ${result.code}: ${result.detail}`);
-      setMessageKey('error.photoLoadFailed');
+      showMessage('error.photoLoadFailed');
       return;
     }
     const decoded = await decodePhotos(result.images);
     if (decoded === null) {
       // Every URL of that batch is already revoked and nothing is placed.
-      setMessageKey('error.photoUnreadable');
+      showMessage('error.photoUnreadable');
       return;
     }
     fillFromPhotos(decoded);
+  };
+
+  // SPEC-002 §6 "Generate". The button is never disabled (SA call B-7): Req 14
+  // wants a message that *names* the problem, and a disabled button cannot.
+  const handleGenerate = async (): Promise<void> => {
+    showMessage(null);
+    if (!template) {
+      return;
+    }
+
+    // On-screen list order — top-most first, the reverse of the store's
+    // back-most-first array, the same order `UseTemplateSlotPanel` shows.
+    const missing = [...template.slots]
+      .reverse()
+      .filter((slot) => slot.required && !photos[slot.id])
+      .map((slot) => slot.name);
+    if (missing.length > 0) {
+      // B17: no dialog and no file — this stops here.
+      setMessage({ key: 'error.requiredSlotEmpty', slots: missing.join(', ') });
+      return;
+    }
+
+    const canvas = composeTemplateToCanvas(template, photos);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/png');
+    });
+    if (!blob) {
+      console.error('canvas.toBlob produced no PNG blob');
+      showMessage('error.exportFailed');
+      return;
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+
+    const result = await window.api.savePng(bytes, {
+      dialogTitle: th['dialog.exportPng.title'],
+      fileTypeLabel: th['dialog.pngTypeLabel'],
+      defaultFileName: `${template.name}.png`,
+    });
+    if (result.status === 'error') {
+      console.error(`savePng ${result.code}: ${result.detail}`);
+      showMessage('error.exportFailed');
+      return;
+    }
+    // `saved` shows no confirmation at all (B-8) and `canceled` is a no-op (B7).
   };
 
   return (
@@ -99,13 +162,25 @@ export function UseTemplateView(): JSX.Element {
           {th['useTemplate.pickTemplate']}
         </button>
 
-        <button
-          type="button"
-          onClick={handlePickManyPhotos}
-          className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
-          {th['useTemplate.pickManyPhotos']}
-        </button>
+        {template && (
+          <button
+            type="button"
+            onClick={handlePickManyPhotos}
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            {th['useTemplate.pickManyPhotos']}
+          </button>
+        )}
+
+        {template && (
+          <button
+            type="button"
+            onClick={handleGenerate}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {th['useTemplate.generate']}
+          </button>
+        )}
 
         {template && (
           <p className="flex min-w-0 items-baseline gap-2 text-xs text-slate-600 dark:text-slate-300">
@@ -116,9 +191,9 @@ export function UseTemplateView(): JSX.Element {
           </p>
         )}
 
-        {messageKey && (
+        {message && (
           <p role="alert" className="w-full text-xs text-red-600 dark:text-red-400">
-            {th[messageKey]}
+            {th[message.key].replace('{slots}', message.slots ?? '')}
           </p>
         )}
       </div>
@@ -136,7 +211,7 @@ export function UseTemplateView(): JSX.Element {
           )}
         </main>
         <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <UseTemplateSlotPanel onMessage={setMessageKey} />
+          <UseTemplateSlotPanel onMessage={showMessage} />
         </aside>
       </div>
     </>

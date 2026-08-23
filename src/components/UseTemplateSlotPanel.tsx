@@ -1,22 +1,76 @@
+import { decodePhotos } from '@/lib/photo';
 import { useTemplateStore } from '@/store/useTemplateStore';
 import { th } from '@/i18n/th';
+import type { UseTemplateMessageKey } from './UseTemplateView';
 
 const MARKER =
   'shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600 ' +
   'dark:bg-slate-700 dark:text-slate-300';
+
+/** The designer's row-button styling (`SlotListPanel`), copied, not re-invented. */
+const ROW_BUTTON =
+  'rounded border border-slate-300 px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-100 ' +
+  'dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700';
+
+interface UseTemplateSlotPanelProps {
+  /**
+   * Writes the view's single `role="alert"` line (SPEC-002 §6 "Messages").
+   * `null` clears it, which every pick does before it starts.
+   */
+  onMessage: (key: UseTemplateMessageKey | null) => void;
+}
 
 /**
  * The Use Template slot list (SPEC-002 §6). Ordered **top-most first** — the
  * reverse of the store's back-most-first array, identical to `SlotListPanel`,
  * which is what Req 4b's "the order the on-screen slot list shows them" means.
  *
- * Read-only in TASK-007: the per-row photo buttons arrive with TASK-008.
+ * Each row carries its own `useTemplate.pickPhoto` (Req 4a) and, once it holds a
+ * photo, `useTemplate.removePhoto` (Req 16). A pick here is a **single**-file
+ * pick that replaces whatever is in *that* slot (Req 13 / B16) — the toolbar's
+ * multi-pick is the one that skips filled slots.
  */
-export function UseTemplateSlotPanel(): JSX.Element {
+export function UseTemplateSlotPanel({ onMessage }: UseTemplateSlotPanelProps): JSX.Element {
   const template = useTemplateStore((state) => state.template);
   const photos = useTemplateStore((state) => state.photos);
+  const setPhoto = useTemplateStore((state) => state.setPhoto);
+  const removePhoto = useTemplateStore((state) => state.removePhoto);
 
   const topMostFirst = [...(template?.slots ?? [])].reverse();
+
+  const handlePickPhoto = async (slotId: string): Promise<void> => {
+    onMessage(null);
+    const result = await window.api.pickImages({
+      dialogTitle: th['dialog.pickPhotos.title'],
+      fileTypeLabel: th['dialog.photoTypeLabel'],
+      multiple: false,
+    });
+    if (result.status === 'canceled') {
+      return;
+    }
+    if (result.status === 'error') {
+      console.error(`pickImages ${result.code}: ${result.detail}`);
+      onMessage('error.photoLoadFailed');
+      return;
+    }
+    const decoded = await decodePhotos(result.images);
+    if (decoded === null) {
+      // Every URL of that batch is already revoked and nothing is placed.
+      onMessage('error.photoUnreadable');
+      return;
+    }
+    const [photo, ...extra] = decoded;
+    // `multiple: false` is contractually exactly one file. If the seam ever
+    // handed back more, the extras would still be decoded object URLs nobody
+    // owns — releasing them keeps "never leak one" true in every case.
+    for (const unused of extra) {
+      URL.revokeObjectURL(unused.objectUrl);
+    }
+    if (!photo) {
+      return;
+    }
+    setPhoto(slotId, photo);
+  };
 
   return (
     <section className="flex min-h-0 flex-col">
@@ -45,6 +99,24 @@ export function UseTemplateSlotPanel(): JSX.Element {
                   the slot, "no photo yet" is a property of this session. */}
               {slot.required && <span className={MARKER}>{th['useTemplate.slotRequired']}</span>}
               {!photos[slot.id] && <span className={MARKER}>{th['useTemplate.slotEmpty']}</span>}
+              <button
+                type="button"
+                className={ROW_BUTTON}
+                title={th['useTemplate.pickPhoto']}
+                onClick={() => handlePickPhoto(slot.id)}
+              >
+                {th['useTemplate.pickPhoto']}
+              </button>
+              {photos[slot.id] && (
+                <button
+                  type="button"
+                  className={ROW_BUTTON}
+                  title={th['useTemplate.removePhoto']}
+                  onClick={() => removePhoto(slot.id)}
+                >
+                  {th['useTemplate.removePhoto']}
+                </button>
+              )}
             </li>
           ))}
         </ul>

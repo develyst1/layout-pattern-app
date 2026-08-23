@@ -1,31 +1,43 @@
 import { useState } from 'react';
 import { parseTemplateFile } from '@shared/contract';
+import { decodePhotos } from '@/lib/photo';
 import { useTemplateStore } from '@/store/useTemplateStore';
 import { th } from '@/i18n/th';
 import { UseTemplateCanvas } from './UseTemplateCanvas';
 import { UseTemplateSlotPanel } from './UseTemplateSlotPanel';
 
-/** Which §7 message a failed pick shows. Never the raw English `detail` / `reason`. */
-type IoErrorKey = 'error.loadFailed' | 'error.fileUnreadable';
+/**
+ * Which §7 message the single `role="alert"` line shows. Never the raw English
+ * `detail` / `reason`. Exported because the per-row photo buttons live in
+ * `UseTemplateSlotPanel` but write into *this* view's one message line
+ * (SPEC-002 §6 "Messages": one line, at the end of the Use Template toolbar).
+ */
+export type UseTemplateMessageKey =
+  | 'error.loadFailed'
+  | 'error.fileUnreadable'
+  | 'error.photoUnreadable'
+  | 'error.photoLoadFailed';
 
 /**
- * Use Template (SPEC-002 §6, TASK-007). The layout mirrors the designer tree in
- * `App.tsx` — toolbar row, canvas in `<main>`, panel in a `w-72` `<aside>` — so
- * the two modes look like one app.
+ * Use Template (SPEC-002 §6, TASK-007 + TASK-008). The layout mirrors the
+ * designer tree in `App.tsx` — toolbar row, canvas in `<main>`, panel in a `w-72`
+ * `<aside>` — so the two modes look like one app.
  *
  * Picking a template goes through **the existing** `window.api.openTemplate`
- * with the same dialog strings Load Template uses (B12): the renderer never
- * touches the filesystem, and the English `reason` / `detail` that comes back is
- * developer-facing — logged, never rendered.
+ * with the same dialog strings Load Template uses (B12); photos come in through
+ * `window.api.pickImages`. The renderer never touches the filesystem, and the
+ * English `reason` / `detail` that comes back is developer-facing — logged,
+ * never rendered.
  */
 export function UseTemplateView(): JSX.Element {
   const template = useTemplateStore((state) => state.template);
   const loadTemplate = useTemplateStore((state) => state.loadTemplate);
+  const fillFromPhotos = useTemplateStore((state) => state.fillFromPhotos);
 
-  const [ioErrorKey, setIoErrorKey] = useState<IoErrorKey | null>(null);
+  const [messageKey, setMessageKey] = useState<UseTemplateMessageKey | null>(null);
 
   const handlePickTemplate = async (): Promise<void> => {
-    setIoErrorKey(null);
+    setMessageKey(null);
     const result = await window.api.openTemplate({
       dialogTitle: th['dialog.open.title'],
       fileTypeLabel: th['dialog.fileTypeLabel'],
@@ -35,7 +47,7 @@ export function UseTemplateView(): JSX.Element {
     }
     if (result.status === 'error') {
       console.error(`openTemplate ${result.code}: ${result.detail}`);
-      setIoErrorKey('error.loadFailed');
+      setMessageKey('error.loadFailed');
       return;
     }
     const parsed = parseTemplateFile(result.content);
@@ -43,10 +55,37 @@ export function UseTemplateView(): JSX.Element {
       // B10: a bad file changes nothing — the template and photos already
       // loaded stay exactly as they were.
       console.error(`parseTemplateFile rejected the file: ${parsed.reason}`);
-      setIoErrorKey('error.fileUnreadable');
+      setMessageKey('error.fileUnreadable');
       return;
     }
     loadTemplate(parsed.template);
+  };
+
+  // Req 4b / 17: several photos at once. The whole batch is gated and decoded
+  // before any of it is placed (B-4 / B-11); `fillFromPhotos` then fills the
+  // empty slots top-most first and silently revokes whatever it did not use.
+  const handlePickManyPhotos = async (): Promise<void> => {
+    setMessageKey(null);
+    const result = await window.api.pickImages({
+      dialogTitle: th['dialog.pickPhotos.title'],
+      fileTypeLabel: th['dialog.photoTypeLabel'],
+      multiple: true,
+    });
+    if (result.status === 'canceled') {
+      return;
+    }
+    if (result.status === 'error') {
+      console.error(`pickImages ${result.code}: ${result.detail}`);
+      setMessageKey('error.photoLoadFailed');
+      return;
+    }
+    const decoded = await decodePhotos(result.images);
+    if (decoded === null) {
+      // Every URL of that batch is already revoked and nothing is placed.
+      setMessageKey('error.photoUnreadable');
+      return;
+    }
+    fillFromPhotos(decoded);
   };
 
   return (
@@ -60,6 +99,14 @@ export function UseTemplateView(): JSX.Element {
           {th['useTemplate.pickTemplate']}
         </button>
 
+        <button
+          type="button"
+          onClick={handlePickManyPhotos}
+          className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {th['useTemplate.pickManyPhotos']}
+        </button>
+
         {template && (
           <p className="flex min-w-0 items-baseline gap-2 text-xs text-slate-600 dark:text-slate-300">
             {th['useTemplate.currentTemplate']}
@@ -69,9 +116,9 @@ export function UseTemplateView(): JSX.Element {
           </p>
         )}
 
-        {ioErrorKey && (
+        {messageKey && (
           <p role="alert" className="w-full text-xs text-red-600 dark:text-red-400">
-            {th[ioErrorKey]}
+            {th[messageKey]}
           </p>
         )}
       </div>
@@ -89,7 +136,7 @@ export function UseTemplateView(): JSX.Element {
           )}
         </main>
         <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <UseTemplateSlotPanel />
+          <UseTemplateSlotPanel onMessage={setMessageKey} />
         </aside>
       </div>
     </>

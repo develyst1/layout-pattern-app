@@ -5,9 +5,9 @@ import { create } from 'zustand';
  * "Modes" / "Dark mode", TASK-004).
  *
  * Both are **in-memory only** — nothing here is persisted or saved into a
- * template file. `useTemplate` is out of scope for REQ-001: the entry exists and
- * is visibly disabled (A6), so `setMode` is never called with it today; the
- * union keeps the shell honest for when that mode arrives.
+ * template file. Both modes are live since TASK-007 enabled the Use Template
+ * entry, so `setMode` is called with either value; this store stays a plain
+ * in-memory container and neither mode's state lives here (SPEC-002 §6, B-5).
  */
 export type AppMode = 'designer' | 'useTemplate';
 export type Theme = 'light' | 'dark';

@@ -18,6 +18,7 @@ export function SlotPropertiesPanel(): JSX.Element {
   );
   const renameSlot = useDesignerStore((state) => state.renameSlot);
   const updateSlot = useDesignerStore((state) => state.updateSlot);
+  const setSlotRequired = useDesignerStore((state) => state.setSlotRequired);
 
   const [draftName, setDraftName] = useState('');
   const [errorKey, setErrorKey] = useState<NameErrorKey | null>(null);
@@ -85,6 +86,17 @@ export function SlotPropertiesPanel(): JSX.Element {
               }
               className="h-8 w-16 cursor-pointer rounded border border-slate-300 dark:border-slate-600"
             />
+          </label>
+
+          {/* REQ-002 Req 15: checked = the slot is required. */}
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={selectedSlot.required}
+              onChange={(event) => setSlotRequired(selectedSlot.id, event.target.checked)}
+              className="h-4 w-4 cursor-pointer"
+            />
+            {th['props.required']}
           </label>
         </div>
       )}

@@ -1,7 +1,10 @@
 // The ONLY place Thai user-facing text exists (SPEC-001 §2, §7).
 //
-// All 27 keys and their values are copied verbatim from SPEC-001 §7. The keys are
-// fixed by the SPEC; the values are the human's to approve. A wording correction is
+// All 32 keys and their values are copied verbatim from the SPEC that introduced
+// them — 26 from SPEC-001 §7 and 6 from SPEC-002 §7 (whose 18 strings the human
+// approved on 2026-08-23, REQ-002 Q13). SPEC-001's 27th, `mode.useTemplate.badge`,
+// was deleted by TASK-007: the mode is available now, so it became dead text. The
+// keys are fixed by the SPEC; the values are the human's to approve. A wording correction is
 // a one-line change in this file and NOWHERE else — never branch on a message's
 // text, never bake one into a component, a store or a test.
 
@@ -9,7 +12,6 @@ export const th = {
   'app.windowTitle': 'โปรแกรมออกแบบเลย์เอาต์ภาพ', // application window title
   'mode.designer': 'ออกแบบเลย์เอาต์', // tab: Layout Designer
   'mode.useTemplate': 'ใช้เทมเพลต', // tab: Use Template
-  'mode.useTemplate.badge': 'ยังไม่พร้อมใช้งาน', // short "not available yet" marker on that tab
   'toolbar.templateName': 'ชื่อเทมเพลต', // label of the template-name input
   'toolbar.canvasWidth': 'ความกว้าง (px)', // label: canvas width
   'toolbar.canvasHeight': 'ความสูง (px)', // label: canvas height
@@ -25,6 +27,12 @@ export const th = {
   'props.heading': 'คุณสมบัติช่อง', // heading of the slot properties panel
   'props.name': 'ชื่อช่อง', // label: slot name
   'props.color': 'สีช่อง', // label: slot colour
+  'props.required': 'ต้องใส่รูป', // designer: checkbox label; checked = the slot is required
+  'useTemplate.pickTemplate': 'เลือกเทมเพลต', // button: choose the template .json
+  'useTemplate.noTemplate': 'ยังไม่ได้เลือกเทมเพลต', // shown before any template is chosen
+  'useTemplate.currentTemplate': 'เทมเพลตที่ใช้อยู่', // label in front of the loaded template's name
+  'useTemplate.slotEmpty': 'ยังไม่มีรูป', // marker on a row whose slot has no photo
+  'useTemplate.slotRequired': 'ต้องใส่รูป', // marker on a row whose slot is required
   'dialog.save.title': 'บันทึกไฟล์เทมเพลต', // native Save dialog title
   'dialog.open.title': 'เปิดไฟล์เทมเพลต', // native Open dialog title
   'dialog.fileTypeLabel': 'ไฟล์เทมเพลต (JSON)', // file-type label for the JSON filter

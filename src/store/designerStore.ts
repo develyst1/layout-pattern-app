@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { TEMPLATE_FORMAT_VERSION, type SlotData, type TemplateFile } from '@shared/contract';
+// SPEC-002 §6 / TASK-007: both load repairs now live in one place, shared with
+// the Use Template store. `normalizeZIndex` used to be defined in this file.
+import { normalizeTemplate, normalizeZIndex } from '@/lib/template';
 
 // SPEC-001 §5 "Canvas size" / §9 A-2.
 export const DEFAULT_CANVAS_WIDTH = 1080;
@@ -49,17 +52,6 @@ function nameKey(name: string): string {
 }
 
 /**
- * SPEC-001 §3: `zIndex` is contiguous `0 … n-1`, `0` = back-most. Called after
- * every mutation, and it also leaves `slots` sorted back-most first, so array
- * order and paint order are the same thing everywhere downstream.
- */
-function normalizeZIndex(slots: SlotData[]): SlotData[] {
-  return [...slots]
-    .sort((a, b) => a.zIndex - b.zIndex)
-    .map((slot, index) => (slot.zIndex === index ? slot : { ...slot, zIndex: index }));
-}
-
-/**
  * SPEC-001 §5 "Add slot" / REQ-001 A17: the lowest `slot N` from 1 up that is not
  * already in use, "in use" under the same case-insensitive rule as the rename
  * check — so with a slot the user renamed to `Slot 3`, the generator skips 3.
@@ -105,6 +97,7 @@ export interface DesignerState {
   addSlot: () => void;
   updateSlot: (id: string, patch: SlotPatch) => void;
   renameSlot: (id: string, name: string) => RenameResult;
+  setSlotRequired: (id: string, required: boolean) => void;
   deleteSlot: (id: string) => void;
   bringForward: (id: string) => void;
   sendBackward: (id: string) => void;
@@ -134,6 +127,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         height: Math.min(NEW_SLOT_SIZE, state.canvasHeight),
         zIndex: state.slots.length,
         color: SLOT_COLORS[state.slots.length % SLOT_COLORS.length],
+        // REQ-002 Req 15d: a new slot starts required, so a slot whose control the
+        // user never touches behaves exactly like an old template's slot.
+        required: true,
       };
       return {
         slots: normalizeZIndex([...state.slots, slot]),
@@ -167,6 +163,14 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     return { ok: true };
   },
 
+  // REQ-002 Req 15. Deliberately NOT carried on `SlotPatch`: that patch is the
+  // geometry/colour path used by drag and transform, and this flag has no
+  // business travelling on it.
+  setSlotRequired: (id, required) =>
+    set((state) => ({
+      slots: state.slots.map((slot) => (slot.id === id ? { ...slot, required } : slot)),
+    })),
+
   deleteSlot: (id) =>
     set((state) => ({
       slots: normalizeZIndex(state.slots.filter((slot) => slot.id !== id)),
@@ -187,28 +191,20 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   // SPEC-001 §5 "Load": replaces the whole designer state, never merges.
   //
-  // Two repairs happen HERE and nowhere else, because `parseTemplateFile`
-  // deliberately accepts both (SPEC-001 §3 / §9 A-11 — repairable input is the
-  // renderer's job to repair, not the validator's to reject):
-  //   * `normalizeZIndex` — duplicated / non-contiguous zIndex values come out
-  //     contiguous 0…n-1 in the same visual stacking order;
-  //   * `.trim()` on the template name and on every slot name — a hand-edited
-  //     file may be padded, and §5's rename path can never produce a padded
-  //     name, so an untrimmed load would leave the store in a state the UI
-  //     itself cannot reach (TASK-002 §Review N5).
-  // Trim only: blank names are already rejected by the validator, so a trim can
-  // never empty a name here.
-  replaceAll: (template) =>
+  // The two repairs (`normalizeZIndex` + trimming the template name and every
+  // slot name) moved to `@/lib/template` in TASK-007 so Use Template shares one
+  // copy. `normalizeTemplate` is exactly what used to be written out here — see
+  // that file for the SPEC-001 §3 / §9 A-11 reasoning.
+  replaceAll: (template) => {
+    const normalized = normalizeTemplate(template);
     set({
-      canvasWidth: template.canvasWidth,
-      canvasHeight: template.canvasHeight,
-      templateName: template.name.trim(),
-      slots: normalizeZIndex(template.slots).map((slot) => ({
-        ...slot,
-        name: slot.name.trim(),
-      })),
+      canvasWidth: normalized.canvasWidth,
+      canvasHeight: normalized.canvasHeight,
+      templateName: normalized.name,
+      slots: normalized.slots,
       selectedSlotId: null,
-    }),
+    });
+  },
 
   toTemplateFile: () => {
     const { templateName, canvasWidth, canvasHeight, slots } = get();

@@ -7,9 +7,10 @@ import { th } from '@/i18n/th';
  * a two-entry mode bar plus the dark-mode toggle, wrapped around whatever the
  * active mode renders.
  *
- * `Use Template` is deliberately a **disabled** entry carrying
- * `mode.useTemplate.badge` — REQ-001 A6 wants it visible and marked unavailable,
- * and clicking it must do nothing rather than navigate anywhere.
+ * Both entries are live from TASK-007 on (SPEC-002 §6 "The mode shell"): `Use
+ * Template` used to be a disabled entry carrying `mode.useTemplate.badge`
+ * (REQ-001 A6), and now switches mode exactly like the designer entry. The badge
+ * key is deleted rather than left unused.
  */
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
   const mode = useUiStore((state) => state.mode);
@@ -47,14 +48,15 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
 
         <button
           type="button"
-          disabled
-          aria-disabled="true"
-          className="flex cursor-not-allowed items-center gap-2 rounded px-3 py-1.5 text-sm font-medium text-slate-400 opacity-60 dark:text-slate-500"
+          onClick={() => setMode('useTemplate')}
+          aria-current={mode === 'useTemplate' ? 'page' : undefined}
+          className={
+            mode === 'useTemplate'
+              ? 'rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white'
+              : 'rounded px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-700'
+          }
         >
           {th['mode.useTemplate']}
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-            {th['mode.useTemplate.badge']}
-          </span>
         </button>
 
         <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
